@@ -1,60 +1,187 @@
-# Sécurité Sociale API
+# AssureEver — API Backend
 
-API REST FastAPI pour le système de gestion de l'organisme de sécurité sociale.
+API REST FastAPI pour la plateforme de gestion de la sécurité sociale AssureEver.
+
+> Dépôt frontend : [assureever-frontend](https://github.com/ALEMDJOU/assureever-frontend)
 
 ## Stack technique
 
-| Composant | Technologie |
-|---|---|
-| Framework | FastAPI |
-| ORM | SQLAlchemy 2.0 (async) |
-| Migrations | Alembic |
-| Base de données | PostgreSQL |
-| Validation | Pydantic v2 |
-| Auth | JWT (NextAuth.js compatible) |
-| PDF | ReportLab |
-| Déploiement | Railway |
+| Composant      | Technologie                        |
+|----------------|------------------------------------|
+| Framework      | FastAPI                            |
+| ORM            | SQLAlchemy 2.0 (async)             |
+| Migrations     | Alembic                            |
+| Base de données| PostgreSQL 16                      |
+| Validation     | Pydantic v2                        |
+| Auth           | JWT compatible NextAuth.js v5      |
+| Hachage mdp    | passlib + bcrypt                   |
+| PDF            | ReportLab                          |
+| Déploiement    | Railway                            |
+
+---
 
 ## Architecture
 
 ```
 app/
-├── core/           → Configuration, sécurité, exceptions
-├── models/         → Modèles SQLAlchemy (tables)
-├── schemas/        → Schémas Pydantic (validation I/O)
-├── services/       → Logique métier
-├── routers/        → Endpoints REST
-└── main.py         → Point d'entrée
+├── core/
+│   ├── config.py        → Variables d'environnement (pydantic-settings)
+│   ├── security.py      → Vérification JWT NextAuth + dépendances de rôles
+│   └── exceptions.py    → Handlers d'erreurs globaux
+├── models/              → Modèles SQLAlchemy (tables PostgreSQL)
+├── schemas/             → Schémas Pydantic (validation requêtes/réponses)
+├── services/            → Logique métier et règles du cahier d'analyse
+├── routers/             → Endpoints REST par module
+└── main.py              → Point d'entrée FastAPI
 ```
 
-## Installation
+---
+
+## Cas d'utilisation implémentés
+
+| UC  | Acteur            | Description                                     | Statut |
+|-----|-------------------|-------------------------------------------------|--------|
+| UC0 | **Assureur**      | Enregistrer un médecin (généraliste/spécialiste)| ✅ Ajouté (absent du cahier original — voir note) |
+| UC1 | **Assureur**      | Inscrire un assuré                              | ✅ |
+| UC2 | **Assureur**      | Enregistrer un médecin traitant pour un assuré  | ✅ |
+| UC3 | **Assureur**      | Effectuer un remboursement                      | ✅ |
+| UC4 | **Assureur**      | Imprimer / télécharger une facture PDF          | ✅ |
+| UC5 | **Assureur**      | Compléter une feuille de maladie                | ✅ |
+| UC6 | **Médecin**       | Enregistrer une feuille de maladie              | ✅ |
+| UC7 | **Médecin**       | Prescrire un médicament                         | ✅ |
+| UC8 | **Médecin**       | Prescrire une consultation chez un spécialiste  | ✅ |
+| UC9 | **Assureur + Médecin** | S'authentifier                             | ✅ |
+
+> **Note — UC0 (Enregistrer un médecin) :**
+> Ce cas d'utilisation est **absent du cahier d'analyse original** (lacune de conception
+> identifiée lors de l'analyse). Il a été ajouté car :
+> - UC8 pose comme pré-condition que *"le spécialiste existe dans le système"*.
+> - UC2 requiert que le médecin traitant soit trouvable dans le système.
+> - Le package *Inscriptions* du cahier décrit explicitement *"l'enregistrement des médecins
+>   au sein de l'organisme de sécurité sociale"*.
+>
+> **C'est donc l'Assureur qui inscrit les médecins** (généralistes et spécialistes),
+> exactement comme il inscrit les assurés. Un médecin ne s'inscrit pas lui-même.
+> L'enregistrement crée simultanément la fiche médecin et un compte utilisateur
+> pour permettre au médecin de s'authentifier (UC9).
+
+---
+
+## Endpoints REST
+
+### Médecins (`/api/v1/medecins`) — UC0
+
+| Méthode | Endpoint             | Rôle     | Description                                              |
+|---------|----------------------|----------|----------------------------------------------------------|
+| GET     | `/`                  | Tous     | Lister les médecins (filtre type + recherche)            |
+| POST    | `/`                  | ASSUREUR | **Enregistrer un médecin** + créer son compte utilisateur|
+| GET     | `/generalistes`      | ASSUREUR | Lister uniquement les généralistes (pour UC2)            |
+| GET     | `/specialistes`      | Tous     | Lister les spécialistes (filtre spécialité, pour UC8)    |
+| GET     | `/{id}`              | Tous     | Fiche complète d'un médecin                              |
+| PATCH   | `/{id}`              | ASSUREUR | Mettre à jour téléphone ou spécialité                    |
+| DELETE  | `/{id}`              | ASSUREUR | Désactiver le compte (données conservées)                |
+
+**Corps de la requête POST :**
+```json
+{
+  "matricule": "MED-2024-001",
+  "nom": "Kenne",
+  "prenom": "Diha",
+  "type_medecin": "GENERALISTE",
+  "specialite": null,
+  "telephone": "+237 6XX XXX XXX",
+  "email": "kenne.diha@clinique.cm",
+  "password": "motdepasse123"
+}
+```
+> Pour un spécialiste, `type_medecin = "SPECIALISTE"` et `specialite` est **obligatoire**
+> (ex : `"Cardiologie"`, `"Ophtalmologie"`).
+
+---
+
+### Assurés (`/api/v1/assures`) — UC1, UC2 — Rôle : ASSUREUR
+
+| Méthode | Endpoint                      | Description                              |
+|---------|-------------------------------|------------------------------------------|
+| GET     | `/`                           | Lister (pagination + recherche)          |
+| POST    | `/`                           | Inscrire un assuré (contrôle doublon)    |
+| GET     | `/{id}`                       | Fiche complète d'un assuré               |
+| PUT     | `/{id}/medecin-traitant`      | Associer un médecin traitant (généraliste uniquement) |
+
+---
+
+### Feuilles de maladie (`/api/v1/feuilles-maladie`) — UC5, UC6
+
+| Méthode | Endpoint                         | Rôle              | Description                     |
+|---------|----------------------------------|-------------------|---------------------------------|
+| GET     | `/assure/{id}`                   | Tous              | Toutes les feuilles d'un assuré |
+| GET     | `/assure/{id}/en-attente`        | ASSUREUR          | Feuilles à rembourser           |
+| POST    | `/`                              | MEDECIN           | Enregistrer une feuille         |
+| PATCH   | `/{id}`                          | ASSUREUR          | Compléter une feuille           |
+
+---
+
+### Prescriptions (`/api/v1/prescriptions`) — UC7, UC8 — Rôle : MEDECIN
+
+| Méthode | Endpoint                        | Description                                  |
+|---------|---------------------------------|----------------------------------------------|
+| POST    | `/medicament`                   | Prescrire un médicament                      |
+| POST    | `/consultation-specialiste`     | Prescrire une consultation chez un spécialiste|
+
+---
+
+### Remboursements (`/api/v1/remboursements`) — UC3, UC4 — Rôle : ASSUREUR
+
+| Méthode | Endpoint                    | Description                              |
+|---------|-----------------------------|------------------------------------------|
+| GET     | `/assure/{id}`              | Historique des remboursements            |
+| POST    | `/`                         | Effectuer un remboursement               |
+| GET     | `/{id}/facture`             | Télécharger la facture PDF               |
+
+---
+
+## Règles métier
+
+| Règle | Description |
+|---|---|
+| Inscription médecin | Seul l'**Assureur** peut enregistrer un médecin (UC0) |
+| Médecin traitant | Seul un médecin **GENERALISTE** peut être désigné médecin traitant (UC2) |
+| Taux remboursement | **100%** pour un généraliste, **80%** pour un spécialiste (UC3) |
+| Spécialité obligatoire | Un médecin **SPECIALISTE** doit avoir une spécialité renseignée (UC0) |
+| Prescription spécialiste | Le médecin cible d'une prescription doit être de type **SPECIALISTE** (UC8) |
+| Contrôle doublon assuré | Vérification nom + prénom + date de naissance (UC1) |
+| Contrôle doublon médecin | Vérification sur le matricule et l'email (UC0) |
+| Statuts feuille | `EN_ATTENTE` → `COMPLETE` → `REMBOURSEE` |
+| Désactivation médecin | Le compte est désactivé mais les données historiques sont conservées |
+
+---
+
+## Installation locale
 
 ### Prérequis
 - Python 3.12+
 - PostgreSQL 16+
 
-### Développement local
-
 ```bash
-# Cloner le dépôt
-git clone https://github.com/ALEMDJOU/securite-sociale-api.git
-cd securite-sociale-api
+# Cloner
+git clone https://github.com/ALEMDJOU/assureever-api.git
+cd assureever-api
 
-# Créer l'environnement virtuel
+# Environnement virtuel
 python -m venv venv
-source venv/bin/activate  # Windows : venv\Scripts\activate
+source venv/bin/activate   # Windows : venv\Scripts\activate
 
-# Installer les dépendances
+# Dépendances
 pip install -r requirements.txt
 
-# Configurer les variables d'environnement
+# Variables d'environnement
 cp .env.example .env
-# Éditer .env avec vos valeurs
+# Éditer .env
 
-# Appliquer les migrations
+# Migrations
 alembic upgrade head
 
-# Lancer le serveur
+# Démarrer
 uvicorn app.main:app --reload
 ```
 
@@ -64,60 +191,17 @@ uvicorn app.main:app --reload
 docker-compose up -d
 ```
 
-L'API sera accessible sur `http://localhost:8000`.
+---
 
-## Documentation
+## Documentation interactive
 
-| Interface | URL |
-|---|---|
-| Swagger UI | http://localhost:8000/docs |
-| ReDoc | http://localhost:8000/redoc |
-| Health check | http://localhost:8000/health |
+| Interface   | URL                            |
+|-------------|--------------------------------|
+| Swagger UI  | http://localhost:8000/docs     |
+| ReDoc       | http://localhost:8000/redoc    |
+| Health check| http://localhost:8000/health   |
 
-## Endpoints
-
-### Assurés (`/api/v1/assures`) — Rôle : ASSUREUR
-| Méthode | Endpoint | Description |
-|---|---|---|
-| GET | `/` | Lister les assurés (pagination + recherche) |
-| POST | `/` | Inscrire un nouvel assuré |
-| GET | `/{id}` | Fiche d'un assuré |
-| PUT | `/{id}/medecin-traitant` | Enregistrer le médecin traitant |
-
-### Médecins (`/api/v1/medecins`) — Rôle : ASSUREUR / MEDECIN
-| Méthode | Endpoint | Description |
-|---|---|---|
-| GET | `/` | Lister les médecins (filtre par type) |
-| POST | `/` | Enregistrer un médecin |
-| GET | `/{id}` | Fiche d'un médecin |
-
-### Feuilles de maladie (`/api/v1/feuilles-maladie`)
-| Méthode | Endpoint | Description | Rôle |
-|---|---|---|---|
-| GET | `/assure/{id}` | Toutes les feuilles d'un assuré | ASSUREUR/MEDECIN |
-| GET | `/assure/{id}/en-attente` | Feuilles à rembourser | ASSUREUR |
-| POST | `/` | Enregistrer une feuille | MEDECIN |
-| PATCH | `/{id}` | Compléter une feuille | ASSUREUR |
-
-### Prescriptions (`/api/v1/prescriptions`) — Rôle : MEDECIN
-| Méthode | Endpoint | Description |
-|---|---|---|
-| POST | `/medicament` | Prescrire un médicament |
-| POST | `/consultation-specialiste` | Prescrire chez un spécialiste |
-
-### Remboursements (`/api/v1/remboursements`) — Rôle : ASSUREUR
-| Méthode | Endpoint | Description |
-|---|---|---|
-| GET | `/assure/{id}` | Historique des remboursements |
-| POST | `/` | Effectuer un remboursement |
-| GET | `/{id}/facture` | Télécharger la facture PDF |
-
-## Règles métier
-
-- **Taux de remboursement** : 100% pour un médecin généraliste, 80% pour un spécialiste
-- **Médecin traitant** : Seul un médecin GENERALISTE peut être désigné comme médecin traitant
-- **Contrôle de doublon** : Vérification nom + prénom + date de naissance à l'inscription
-- **Statuts feuille de maladie** : EN_ATTENTE → COMPLETE → REMBOURSEE
+---
 
 ## Variables d'environnement
 
@@ -128,27 +212,33 @@ FRONTEND_URL=http://localhost:3000
 ENVIRONMENT=development
 ```
 
-## Déploiement Railway
+---
 
-1. Connecter le dépôt GitHub à Railway
-2. Configurer les variables d'environnement dans Railway
-3. Railway détecte automatiquement le `Dockerfile`
-4. Lancer la migration : `alembic upgrade head` (via Railway CLI ou la console)
-
-## Migrations
+## Migrations Alembic
 
 ```bash
-# Créer une nouvelle migration
+# Créer une migration
 alembic revision --autogenerate -m "description"
 
-# Appliquer les migrations
+# Appliquer
 alembic upgrade head
 
 # Revenir en arrière
 alembic downgrade -1
 ```
 
+---
+
+## Déploiement Railway
+
+1. Connecter ce dépôt à Railway
+2. Configurer les variables d'environnement
+3. Railway détecte le `Dockerfile` automatiquement
+4. Exécuter `alembic upgrade head` via la console Railway
+
+---
+
 ## Auteurs
 
-Projet tutoré 3GI — Conception des Systèmes d'Information  
+Projet tutoré 3GI — Conception des Systèmes d'Information
 Supervisé par Dr. Anne Marie CHANA et Dr. Jaures Styve KAMENI
