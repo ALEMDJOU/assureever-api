@@ -8,17 +8,28 @@ from app.services import auth_service
 router = APIRouter(prefix="/auth", tags=["Authentification"])
 
 
-@router.post("/login", response_model=TokenResponse)
-async def login(
+@router.post("/login/medecin", response_model=TokenResponse)
+async def login_medecin(
     data: LoginRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Authentifie un utilisateur (assureur ou médecin).
-    Retourne un JWT signé compatible avec NextAuth.js v5.
-    Le token contient : sub (user_id), email, role, nom, prenom.
+    Connexion réservée aux médecins.
+    Retourne 403 si les identifiants correspondent à un compte assureur.
     """
-    return await auth_service.login(db, data)
+    return await auth_service.login_medecin(db, data)
+
+
+@router.post("/login/assureur", response_model=TokenResponse)
+async def login_assureur(
+    data: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Connexion réservée à l'assureur unique.
+    Retourne 403 si les identifiants correspondent à un compte médecin.
+    """
+    return await auth_service.login_assureur(db, data)
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
@@ -27,15 +38,8 @@ async def register(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Inscrit un nouvel agent assureur.
-    **Endpoint public** — aucun token requis.
-    Seul le rôle ASSUREUR est autorisé via cet endpoint.
-    Les médecins sont créés par les assureurs via POST /api/v1/medecins.
+    Inscrit l'assureur unique du système.
+    Endpoint public — refusé (409) si un assureur existe déjà.
+    Les médecins sont créés par l'assureur via POST /api/v1/medecins.
     """
     return await auth_service.register_assureur(db, data)
-
-
-@router.get("/me", response_model=dict)
-async def me(db: AsyncSession = Depends(get_db)):
-    """Endpoint de test — retourne le statut de l'API auth."""
-    return {"statut": "auth service opérationnel"}
