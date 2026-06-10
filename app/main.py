@@ -9,7 +9,7 @@ from app.core.exceptions import (
     integrity_error_handler,
     generic_exception_handler,
 )
-from app.routers import assures, medecins, feuilles_maladie, prescriptions, remboursements
+from app.routers import auth, assures, medecins, feuilles_maladie, prescriptions, remboursements
 
 app = FastAPI(
     title=settings.API_TITLE,
@@ -38,6 +38,7 @@ app.add_exception_handler(Exception, generic_exception_handler)
 
 # Inclusion des routers
 PREFIX = settings.API_PREFIX
+app.include_router(auth.router, prefix=PREFIX)
 app.include_router(assures.router, prefix=PREFIX)
 app.include_router(medecins.router, prefix=PREFIX)
 app.include_router(feuilles_maladie.router, prefix=PREFIX)
