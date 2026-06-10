@@ -22,13 +22,27 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS — autoriser les requêtes depuis le frontend Next.js
+# ─── CORS ─────────────────────────────────────────────────────────────────────
+# En développement : accepter toutes les origines pour simplifier les tests locaux.
+# En production   : restreindre à FRONTEND_URL uniquement.
+
+if settings.ENVIRONMENT == "development":
+    allow_origins = ["*"]
+    allow_credentials = False          # credentials incompatible avec wildcard
+else:
+    allow_origins = [
+        settings.FRONTEND_URL,
+        # Ajouter ici d'autres origines autorisées si nécessaire
+    ]
+    allow_credentials = True
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=allow_origins,
+    allow_credentials=allow_credentials,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
+    expose_headers=["Content-Disposition"],   # pour le téléchargement PDF
 )
 
 # Handlers d'erreurs globaux
