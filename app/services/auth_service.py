@@ -13,15 +13,14 @@ from datetime import datetime, timedelta
 
 from fastapi import HTTPException, status
 from jose import jwt
-from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.config import settings
+from app.core.hashing import hash_password, verify_password
 from app.models.user import User, RoleEnum
 from app.schemas.auth import LoginRequest, RegisterAssureurRequest, TokenResponse, UserInfo
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 8
@@ -47,7 +46,7 @@ async def login(db: AsyncSession, data: LoginRequest) -> TokenResponse:
     )
     user = result.scalar_one_or_none()
 
-    if not user or not pwd_context.verify(data.password, user.password_hash):
+    if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou mot de passe incorrect",
@@ -81,7 +80,7 @@ async def login_medecin(db: AsyncSession, data: LoginRequest) -> TokenResponse:
     )
     user = result.scalar_one_or_none()
 
-    if not user or not pwd_context.verify(data.password, user.password_hash):
+    if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou mot de passe incorrect",
@@ -122,7 +121,7 @@ async def login_assureur(db: AsyncSession, data: LoginRequest) -> TokenResponse:
     )
     user = result.scalar_one_or_none()
 
-    if not user or not pwd_context.verify(data.password, user.password_hash):
+    if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou mot de passe incorrect",
@@ -183,7 +182,7 @@ async def register_assureur(
         nom=data.nom.strip(),
         prenom=data.prenom.strip(),
         email=data.email.lower().strip(),
-        password_hash=pwd_context.hash(data.password),
+        password_hash=hash_password(data.password),
         role=RoleEnum.ASSUREUR,
         is_active=True,
     )

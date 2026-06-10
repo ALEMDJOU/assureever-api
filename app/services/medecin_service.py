@@ -18,7 +18,6 @@ Règles métier implémentées :
 """
 
 import uuid
-from passlib.context import CryptContext
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -26,8 +25,8 @@ from sqlalchemy import select
 from app.models.medecin import Medecin, TypeMedecinEnum
 from app.models.user import User, RoleEnum
 from app.schemas.medecin import MedecinCreate, MedecinUpdate
+from app.core.hashing import hash_password
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 async def enregistrer_medecin(db: AsyncSession, data: MedecinCreate) -> Medecin:
@@ -82,7 +81,7 @@ async def enregistrer_medecin(db: AsyncSession, data: MedecinCreate) -> Medecin:
         nom=data.nom.strip(),
         prenom=data.prenom.strip(),
         email=data.email.lower().strip(),
-        password_hash=pwd_context.hash(data.password),
+        password_hash=hash_password(data.password),
         role=RoleEnum.MEDECIN,
         is_active=True,
     )
