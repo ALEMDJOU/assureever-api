@@ -1,8 +1,10 @@
 import uuid
 from datetime import date, datetime
-from typing import Optional
+from typing import Optional, Literal
 
 from pydantic import BaseModel, EmailStr, field_validator
+
+PreferencePaiement = Literal["VIREMENT_BANCAIRE", "ESPECES", "MOBILE_MONEY"]
 
 
 class AssureCreate(BaseModel):
@@ -12,6 +14,7 @@ class AssureCreate(BaseModel):
     adresse: Optional[str] = None
     telephone: Optional[str] = None
     email: Optional[EmailStr] = None
+    preference_paiement: PreferencePaiement = "VIREMENT_BANCAIRE"
 
     @field_validator("nom", "prenom")
     @classmethod
@@ -40,6 +43,7 @@ class AssureResponse(BaseModel):
     adresse: Optional[str]
     telephone: Optional[str]
     email: Optional[str]
+    preference_paiement: str
     medecin_traitant_id: Optional[uuid.UUID]
     created_at: datetime
 
