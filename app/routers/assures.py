@@ -17,7 +17,7 @@ from app.services import assure_service
 router = APIRouter(prefix="/assures", tags=["Assurés"])
 
 
-@router.get("/", response_model=AssureListResponse)
+@router.get("", response_model=AssureListResponse)
 async def lister_assures(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, ge=1, le=100),
@@ -30,7 +30,7 @@ async def lister_assures(
     return AssureListResponse(total=total, page=page, size=size, items=items)
 
 
-@router.post("/", response_model=AssureResponse, status_code=201)
+@router.post("", response_model=AssureResponse, status_code=201)
 async def inscrire_assure(
     data: AssureCreate,
     db: AsyncSession = Depends(get_db),
