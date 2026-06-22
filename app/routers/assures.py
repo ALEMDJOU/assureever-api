@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.core.security import get_current_assureur
+from app.core.security import get_current_assureur, get_current_user
 from app.schemas.assure import (
     AssureCreate,
     AssureResponse,
@@ -23,9 +23,14 @@ async def lister_assures(
     size: int = Query(default=20, ge=1, le=100),
     recherche: Optional[str] = Query(default=""),
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(get_current_assureur),
+    _: dict = Depends(get_current_user),
 ):
-    """Liste tous les assurés avec pagination et recherche."""
+    """
+    Liste tous les assurés avec pagination et recherche.
+    Accessible aux assureurs ET aux médecins (sélection du patient
+    lors de la création d'une consultation, d'une feuille de maladie
+    ou d'une prescription).
+    """
     items, total = await assure_service.lister_assures(db, page, size, recherche)
     return AssureListResponse(total=total, page=page, size=size, items=items)
 
@@ -44,9 +49,9 @@ async def inscrire_assure(
 async def get_assure(
     assure_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(get_current_assureur),
+    _: dict = Depends(get_current_user),
 ):
-    """Récupère la fiche complète d'un assuré."""
+    """Récupère la fiche complète d'un assuré. Accessible aux assureurs et aux médecins."""
     return await assure_service.get_assure_or_404(db, assure_id)
 
 

@@ -1,17 +1,21 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.core.security import get_current_assureur, get_current_medecin, get_current_user
 from app.models.feuille_maladie import FeuilleMaladie, StatutFeuilleEnum
+from app.models.consultation import Consultation
 from app.schemas.feuille_maladie import (
     FeuilleMaladieCreate,
     FeuilleMaladieComplete,
     FeuilleMaladieResponse,
 )
+from app.services.pdf_service import generer_feuille_pdf
 
 router = APIRouter(prefix="/feuilles-maladie", tags=["Feuilles de Maladie"])
 
@@ -110,3 +114,38 @@ async def completer_feuille(
     await db.flush()
     await db.refresh(feuille)
     return feuille
+
+
+@router.get("/{feuille_id}/pdf")
+async def telecharger_feuille_pdf(
+    feuille_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """Génère et télécharge le PDF d'une feuille de maladie."""
+    result = await db.execute(
+        select(FeuilleMaladie)
+        .options(
+            selectinload(FeuilleMaladie.assure),
+            selectinload(FeuilleMaladie.consultation).selectinload(Consultation.medecin),
+        )
+        .where(FeuilleMaladie.id == feuille_id)
+    )
+    feuille = result.scalar_one_or_none()
+
+    if not feuille:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Feuille introuvable")
+
+    pdf_bytes = generer_feuille_pdf(feuille)
+
+    date_str = feuille.created_at.strftime("%Y-%m-%d")
+    numero = feuille.assure.numero_assure if feuille.assure else str(feuille_id)[:8]
+    filename = f"feuille-maladie-{numero}-{date_str}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        },
+    )

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.core.security import get_current_assureur
@@ -51,7 +52,9 @@ async def telecharger_facture(
 ):
     """Génère et télécharge la facture PDF d'un remboursement."""
     result = await db.execute(
-        select(Remboursement).where(Remboursement.id == remboursement_id)
+        select(Remboursement)
+        .options(selectinload(Remboursement.assure))
+        .where(Remboursement.id == remboursement_id)
     )
     remboursement = result.scalar_one_or_none()
 
@@ -61,10 +64,14 @@ async def telecharger_facture(
 
     pdf_bytes = generer_facture_pdf(remboursement)
 
+    date_str = remboursement.date_remboursement.strftime("%Y-%m-%d")
+    numero = remboursement.assure.numero_assure if remboursement.assure else str(remboursement_id)[:8]
+    filename = f"facture-remboursement-{numero}-{date_str}.pdf"
+
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f"attachment; filename=facture-{remboursement_id}.pdf"
+            "Content-Disposition": f"attachment; filename={filename}"
         },
     )
