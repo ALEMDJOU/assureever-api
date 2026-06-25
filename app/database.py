@@ -9,6 +9,10 @@ engine = create_async_engine(
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20,
+    # Le pooler Supabase (Supavisor, mode transaction) ne supporte pas les
+    # prepared statements côté serveur réutilisés entre requêtes — asyncpg
+    # les active par défaut, ce qui casse la connexion. On les désactive.
+    connect_args={"statement_cache_size": 0},
 )
 
 AsyncSessionLocal = async_sessionmaker(
