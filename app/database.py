@@ -12,7 +12,10 @@ engine = create_async_engine(
     # Le pooler Supabase (Supavisor, mode transaction) ne supporte pas les
     # prepared statements côté serveur réutilisés entre requêtes — asyncpg
     # les active par défaut, ce qui casse la connexion. On les désactive.
-    connect_args={"statement_cache_size": 0},
+    # ssl="require" : Neon (et la plupart des Postgres managés) exigent TLS ;
+    # on le force ici plutôt que via la query string (sslmode n'est pas
+    # compris par asyncpg, qui attend "ssl").
+    connect_args={"statement_cache_size": 0, "ssl": "require"},
 )
 
 AsyncSessionLocal = async_sessionmaker(
