@@ -1,5 +1,7 @@
 import io
 import os
+import re
+import unicodedata
 from datetime import datetime
 
 from reportlab.lib.pagesizes import A4
@@ -34,6 +36,48 @@ HEADER_H = 3.0 * cm
 FOOTER_H = 1.4 * cm
 
 _STYLES = getSampleStyleSheet()
+
+_TYPE_MEDECIN_LABEL = {
+    "GENERALISTE": "Médecin généraliste",
+    "SPECIALISTE": "Médecin spécialiste",
+}
+
+_MODE_PAIEMENT_LABEL = {
+    "VIREMENT_BANCAIRE": "Virement bancaire",
+    "ESPECES": "Espèces",
+    "MOBILE_MONEY": "Mobile Money",
+}
+
+
+def nom_fichier_pdf(prefixe: str, prenom: str | None, nom: str | None) -> str:
+    """Nom de fichier de téléchargement, ex: Feuille_Maladie_Paul_Nguemo.pdf."""
+    parties = [prefixe] + [p for p in (prenom, nom) if p]
+    brut = "_".join(parties)
+    sans_accents = unicodedata.normalize("NFKD", brut).encode("ascii", "ignore").decode("ascii")
+    propre = re.sub(r"[^A-Za-z0-9]+", "_", sans_accents).strip("_")
+    return f"{propre}.pdf"
+
+
+def _numero_court(uuid_value, prefix: str) -> str:
+    """Référence courte et lisible pour l'affichage (ex: FM-3DD92F2D), à partir de l'UUID interne."""
+    return f"{prefix}-{str(uuid_value).split('-')[0].upper()}"
+
+
+def _signature_block(label_gauche: str, label_droite: str) -> Table:
+    """Cadre de signatures (visa/cachet) en bas de document officiel."""
+    style = ParagraphStyle("Sign", fontName="Helvetica", fontSize=9, textColor=SLATE)
+    cell = Paragraph(f"<br/><br/><br/>______________________", style)
+    table = Table(
+        [[Paragraph(f"<b>{label_gauche}</b>", style), Paragraph(f"<b>{label_droite}</b>", style)],
+         [cell, cell]],
+        colWidths=[8.5 * cm, 8.5 * cm],
+    )
+    table.setStyle(TableStyle([
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 14),
+    ]))
+    return table
 
 
 # ─── Letterhead (bandeau + pied de page, dessiné sur chaque page) ─────────────
@@ -228,18 +272,23 @@ def generer_facture_pdf(remboursement: Remboursement) -> bytes:
 
     label, color = _REMBOURSEMENT_BADGE.get(remboursement.statut.value, ("—", SLATE))
     elements.append(_meta_strip(
-        numero=str(remboursement.id),
+        numero=_numero_court(remboursement.id, "RB"),
         date_label="Date",
         date_value=remboursement.date_remboursement.strftime("%d/%m/%Y à %H:%M"),
         badge=_badge(label, color),
     ))
     elements.append(Spacer(1, 0.7 * cm))
 
-    elements.append(_section_title("Détails du remboursement"))
-    elements.append(_card([
-        ["Mode de paiement", remboursement.mode_paiement.value.replace("_", " ").title()],
+    mode_label = _MODE_PAIEMENT_LABEL.get(remboursement.mode_paiement.value, remboursement.mode_paiement.value.title())
+    details = [
+        ["Mode de paiement", mode_label],
         ["Taux de remboursement", f"{remboursement.taux_remboursement:.0f} %"],
-    ]))
+    ]
+    if remboursement.reference_virement:
+        details.append(["Référence de virement", remboursement.reference_virement])
+
+    elements.append(_section_title("Détails du remboursement"))
+    elements.append(_card(details))
     elements.append(Spacer(1, 0.6 * cm))
 
     elements.append(_section_title("Récapitulatif financier"))
@@ -275,7 +324,7 @@ def generer_feuille_pdf(feuille: FeuilleMaladie) -> bytes:
 
     label, color = _FEUILLE_BADGE.get(feuille.statut.value, ("—", SLATE))
     elements.append(_meta_strip(
-        numero=str(feuille.id),
+        numero=_numero_court(feuille.id, "FM"),
         date_label="Enregistrée le",
         date_value=feuille.created_at.strftime("%d/%m/%Y à %H:%M"),
         badge=_badge(label, color),
@@ -294,8 +343,9 @@ def generer_feuille_pdf(feuille: FeuilleMaladie) -> bytes:
     elements.append(_section_title("Consultation"))
     lignes_consultation = []
     if medecin:
+        type_label = _TYPE_MEDECIN_LABEL.get(medecin.type_medecin.value, medecin.type_medecin.value.title())
         lignes_consultation.append(
-            ["Médecin", f"Dr. {medecin.prenom} {medecin.nom} — {medecin.type_medecin.value.title()}"]
+            ["Médecin", f"Dr. {medecin.prenom} {medecin.nom} — {type_label}"]
         )
     if consultation:
         lignes_consultation.append(["Date de consultation", consultation.date_consultation.strftime("%d/%m/%Y")])
@@ -326,5 +376,9 @@ def generer_feuille_pdf(feuille: FeuilleMaladie) -> bytes:
             ("RIGHTPADDING", (0, 0), (-1, -1), 12),
         ]))
         elements.append(obs_table)
+
+    elements.append(Spacer(1, 1.0 * cm))
+    elements.append(_section_title("Cadre réservé à l'assureur"))
+    elements.append(_signature_block("Visa du médecin", "Visa et cachet de l'assureur"))
 
     return _finaliser(doc, elements)

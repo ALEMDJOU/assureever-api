@@ -15,7 +15,7 @@ from app.schemas.remboursement import (
     RemboursementListResponse,
 )
 from app.services import remboursement_service
-from app.services.pdf_service import generer_facture_pdf
+from app.services.pdf_service import generer_facture_pdf, nom_fichier_pdf
 
 router = APIRouter(prefix="/remboursements", tags=["Remboursements"])
 
@@ -64,9 +64,8 @@ async def telecharger_facture(
 
     pdf_bytes = generer_facture_pdf(remboursement)
 
-    date_str = remboursement.date_remboursement.strftime("%Y-%m-%d")
-    numero = remboursement.assure.numero_assure if remboursement.assure else str(remboursement_id)[:8]
-    filename = f"facture-remboursement-{numero}-{date_str}.pdf"
+    assure = remboursement.assure
+    filename = nom_fichier_pdf("Facture", assure.prenom if assure else None, assure.nom if assure else None)
 
     return Response(
         content=pdf_bytes,

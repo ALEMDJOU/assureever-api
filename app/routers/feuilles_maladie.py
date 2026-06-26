@@ -15,7 +15,7 @@ from app.schemas.feuille_maladie import (
     FeuilleMaladieComplete,
     FeuilleMaladieResponse,
 )
-from app.services.pdf_service import generer_feuille_pdf
+from app.services.pdf_service import generer_feuille_pdf, nom_fichier_pdf
 
 router = APIRouter(prefix="/feuilles-maladie", tags=["Feuilles de Maladie"])
 
@@ -138,9 +138,8 @@ async def telecharger_feuille_pdf(
 
     pdf_bytes = generer_feuille_pdf(feuille)
 
-    date_str = feuille.created_at.strftime("%Y-%m-%d")
-    numero = feuille.assure.numero_assure if feuille.assure else str(feuille_id)[:8]
-    filename = f"feuille-maladie-{numero}-{date_str}.pdf"
+    assure = feuille.assure
+    filename = nom_fichier_pdf("Feuille_Maladie", assure.prenom if assure else None, assure.nom if assure else None)
 
     return Response(
         content=pdf_bytes,
