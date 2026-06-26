@@ -54,6 +54,7 @@ async def inscrire_assure(db: AsyncSession, data: AssureCreate) -> Assure:
         adresse=data.adresse,
         telephone=data.telephone,
         email=data.email,
+        preference_paiement=data.preference_paiement,
     )
     db.add(assure)
     await db.flush()

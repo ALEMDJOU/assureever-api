@@ -115,6 +115,7 @@ async def get_medecin_or_404(db: AsyncSession, medecin_id: uuid.UUID) -> Medecin
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Médecin introuvable",
         )
+    await _enrichir_email(db, medecin)
     return medecin
 
 
@@ -144,8 +145,20 @@ async def lister_medecins(
         )
 
     result = await db.execute(stmt)
-    items = result.scalars().all()
+    items = list(result.scalars().all())
+    for medecin in items:
+        await _enrichir_email(db, medecin)
     return items, len(items)
+
+
+async def _enrichir_email(db: AsyncSession, medecin: Medecin) -> None:
+    """Renseigne l'attribut transitoire `email` depuis le User lié, pour la sérialisation."""
+    if not medecin.user_id:
+        medecin.email = None
+        return
+    result = await db.execute(select(User).where(User.id == medecin.user_id))
+    user = result.scalar_one_or_none()
+    medecin.email = user.email if user else None
 
 
 async def mettre_a_jour_medecin(

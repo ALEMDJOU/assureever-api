@@ -40,6 +40,12 @@ class Settings(BaseSettings):
         """Supprime les espaces/sauts de ligne parasites."""
         return v.strip()
 
+    @field_validator("FRONTEND_URL", mode="before")
+    @classmethod
+    def strip_frontend_url(cls, v: str) -> str:
+        """Supprime les espaces/sauts de ligne et le slash final parasites."""
+        return v.strip().rstrip("/")
+
     class Config:
         env_file = _get_env_file()
         case_sensitive = True

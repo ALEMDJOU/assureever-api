@@ -16,7 +16,7 @@ API REST FastAPI pour la plateforme de gestion de la sécurité sociale AssureEv
 | Auth           | JWT compatible NextAuth.js v5      |
 | Hachage mdp    | passlib + bcrypt                   |
 | PDF            | ReportLab                          |
-| Déploiement    | Railway                            |
+| Déploiement    | Render (API) + Neon (BD)           |
 
 ---
 
@@ -229,12 +229,13 @@ alembic downgrade -1
 
 ---
 
-## Déploiement Railway
+## Déploiement (Render + Neon)
 
-1. Connecter ce dépôt à Railway
-2. Configurer les variables d'environnement
-3. Railway détecte le `Dockerfile` automatiquement
-4. Exécuter `alembic upgrade head` via la console Railway
+1. Créer une base de données PostgreSQL sur **Neon**.
+2. Connecter ce dépôt à **Render** (Web Service).
+3. Configurer les variables d'environnement sur Render (dont `DATABASE_URL` pointant vers Neon).
+4. Render détecte le `Dockerfile` automatiquement et effectue le build.
+5. Exécuter les migrations (`alembic upgrade head`) en local (pointant vers Neon) ou via le shell Render.
 
 ---
 
