@@ -1,0 +1,15 @@
+name: Keep API Alive
+
+on:
+  schedule:
+    # Exécute la tâche toutes les 5 minutes
+    - cron: '*/5 * * * *'
+  # Permet également de lancer le workflow manuellement depuis l'interface GitHub
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping de l'API pour éviter la mise en veille
+        run: curl -s https://assureever-api.onrender.com/docs > /dev/null
