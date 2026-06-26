@@ -9,6 +9,8 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.core.security import get_current_assureur
 from app.models.remboursement import Remboursement
+from app.models.feuille_maladie import FeuilleMaladie
+from app.models.consultation import Consultation
 from app.schemas.remboursement import (
     RemboursementCreate,
     RemboursementResponse,
@@ -53,7 +55,12 @@ async def telecharger_facture(
     """Génère et télécharge la facture PDF d'un remboursement."""
     result = await db.execute(
         select(Remboursement)
-        .options(selectinload(Remboursement.assure))
+        .options(
+            selectinload(Remboursement.assure),
+            selectinload(Remboursement.feuille_maladie)
+            .selectinload(FeuilleMaladie.consultation)
+            .selectinload(Consultation.medecin)
+        )
         .where(Remboursement.id == remboursement_id)
     )
     remboursement = result.scalar_one_or_none()

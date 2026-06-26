@@ -10,6 +10,7 @@ from app.database import get_db
 from app.core.security import get_current_assureur, get_current_medecin, get_current_user
 from app.models.feuille_maladie import FeuilleMaladie, StatutFeuilleEnum
 from app.models.consultation import Consultation
+from app.models.prescription import Prescription, PrescriptionMedicament, PrescriptionConsultation
 from app.schemas.feuille_maladie import (
     FeuilleMaladieCreate,
     FeuilleMaladieComplete,
@@ -128,6 +129,13 @@ async def telecharger_feuille_pdf(
         .options(
             selectinload(FeuilleMaladie.assure),
             selectinload(FeuilleMaladie.consultation).selectinload(Consultation.medecin),
+            selectinload(FeuilleMaladie.consultation)
+            .selectinload(Consultation.prescriptions)
+            .selectinload(Prescription.prescription_medicament),
+            selectinload(FeuilleMaladie.consultation)
+            .selectinload(Consultation.prescriptions)
+            .selectinload(Prescription.prescription_consultation)
+            .selectinload(PrescriptionConsultation.specialiste),
         )
         .where(FeuilleMaladie.id == feuille_id)
     )
