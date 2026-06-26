@@ -102,8 +102,9 @@ async def enregistrer_medecin(db: AsyncSession, data: MedecinCreate) -> Medecin:
     await db.flush()
     await db.refresh(medecin)
 
-    # Enrichir la réponse avec l'email depuis le User
-    medecin.email = user.email  # Attribut temporaire pour la sérialisation
+    # Enrichir la réponse avec l'email/statut depuis le User (attributs transitoires)
+    medecin.email = user.email
+    medecin.is_active = user.is_active
     return medecin
 
 
@@ -115,7 +116,7 @@ async def get_medecin_or_404(db: AsyncSession, medecin_id: uuid.UUID) -> Medecin
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Médecin introuvable",
         )
-    await _enrichir_email(db, medecin)
+    await _enrichir_compte(db, medecin)
     return medecin
 
 
@@ -147,18 +148,20 @@ async def lister_medecins(
     result = await db.execute(stmt)
     items = list(result.scalars().all())
     for medecin in items:
-        await _enrichir_email(db, medecin)
+        await _enrichir_compte(db, medecin)
     return items, len(items)
 
 
-async def _enrichir_email(db: AsyncSession, medecin: Medecin) -> None:
-    """Renseigne l'attribut transitoire `email` depuis le User lié, pour la sérialisation."""
+async def _enrichir_compte(db: AsyncSession, medecin: Medecin) -> None:
+    """Renseigne les attributs transitoires `email`/`is_active` depuis le User lié, pour la sérialisation."""
     if not medecin.user_id:
         medecin.email = None
+        medecin.is_active = True
         return
     result = await db.execute(select(User).where(User.id == medecin.user_id))
     user = result.scalar_one_or_none()
     medecin.email = user.email if user else None
+    medecin.is_active = user.is_active if user else True
 
 
 async def mettre_a_jour_medecin(
@@ -200,3 +203,36 @@ async def desactiver_medecin(db: AsyncSession, medecin_id: uuid.UUID) -> dict:
             await db.flush()
 
     return {"message": f"Compte du Dr. {medecin.nom} {medecin.prenom} désactivé"}
+
+
+async def reactiver_medecin(db: AsyncSession, medecin_id: uuid.UUID) -> dict:
+    """
+    Réactive le compte utilisateur d'un médecin précédemment désactivé.
+    Le médecin retrouve immédiatement l'accès (authentification).
+    """
+    medecin = await get_medecin_or_404(db, medecin_id)
+
+    if not medecin.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Aucun compte utilisateur associé à ce médecin",
+        )
+
+    result = await db.execute(select(User).where(User.id == medecin.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Aucun compte utilisateur associé à ce médecin",
+        )
+
+    if user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce compte est déjà actif",
+        )
+
+    user.is_active = True
+    await db.flush()
+
+    return {"message": f"Compte du Dr. {medecin.nom} {medecin.prenom} réactivé"}

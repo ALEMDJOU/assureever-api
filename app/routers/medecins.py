@@ -137,3 +137,16 @@ async def desactiver_medecin(
     Acteur : Assureur uniquement.
     """
     return await medecin_service.desactiver_medecin(db, medecin_id)
+
+
+@router.post("/{medecin_id}/reactiver", status_code=200)
+async def reactiver_medecin(
+    medecin_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_assureur),
+):
+    """
+    Réactive le compte d'un médecin précédemment désactivé.
+    Acteur : Assureur uniquement.
+    """
+    return await medecin_service.reactiver_medecin(db, medecin_id)

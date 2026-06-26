@@ -62,6 +62,7 @@ class MedecinResponse(BaseModel):
     specialite: Optional[str]
     telephone: Optional[str]
     email: Optional[str] = None   # Exposé depuis le User lié
+    is_active: bool = True        # Exposé depuis le User lié
     created_at: datetime
 
     model_config = {"from_attributes": True}
