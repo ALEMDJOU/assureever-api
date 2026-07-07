@@ -21,6 +21,20 @@ from app.services.pdf_service import generer_feuille_pdf, nom_fichier_pdf
 router = APIRouter(prefix="/feuilles-maladie", tags=["Feuilles de Maladie"])
 
 
+@router.get("/en-attente", response_model=list[FeuilleMaladieResponse])
+async def get_toutes_feuilles_en_attente(
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_assureur),
+):
+    """Récupère toutes les feuilles de maladie en attente (statut EN_ATTENTE) du système."""
+    result = await db.execute(
+        select(FeuilleMaladie).where(
+            FeuilleMaladie.statut == StatutFeuilleEnum.EN_ATTENTE
+        )
+    )
+    return result.scalars().all()
+
+
 @router.get("/assure/{assure_id}", response_model=list[FeuilleMaladieResponse])
 async def get_feuilles_assure(
     assure_id: uuid.UUID,

@@ -96,3 +96,10 @@ async def get_remboursements_assure(
     stmt = select(Remboursement).where(Remboursement.assure_id == assure_id)
     result = await db.execute(stmt)
     return result.scalars().all()
+
+
+async def get_tous_remboursements(db: AsyncSession) -> list[Remboursement]:
+    stmt = select(Remboursement)
+    result = await db.execute(stmt)
+    return result.scalars().all()
+

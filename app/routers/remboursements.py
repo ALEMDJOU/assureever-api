@@ -22,6 +22,16 @@ from app.services.pdf_service import generer_facture_pdf, nom_fichier_pdf
 router = APIRouter(prefix="/remboursements", tags=["Remboursements"])
 
 
+@router.get("", response_model=RemboursementListResponse)
+async def get_tous_remboursements(
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_assureur),
+):
+    """Récupère l'historique de tous les remboursements du système. Accessible aux assureurs."""
+    items = await remboursement_service.get_tous_remboursements(db)
+    return RemboursementListResponse(total=len(items), items=items)
+
+
 @router.get("/assure/{assure_id}", response_model=RemboursementListResponse)
 async def get_remboursements_assure(
     assure_id: uuid.UUID,
