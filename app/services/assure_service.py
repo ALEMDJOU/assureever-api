@@ -6,6 +6,7 @@ from datetime import date
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
+from sqlalchemy.orm import selectinload
 
 from app.models.assure import Assure
 from app.models.medecin import Medecin, TypeMedecinEnum
@@ -63,7 +64,11 @@ async def inscrire_assure(db: AsyncSession, data: AssureCreate) -> Assure:
 
 
 async def get_assure_or_404(db: AsyncSession, assure_id: uuid.UUID) -> Assure:
-    result = await db.execute(select(Assure).where(Assure.id == assure_id))
+    result = await db.execute(
+        select(Assure)
+        .options(selectinload(Assure.medecin_traitant))
+        .where(Assure.id == assure_id)
+    )
     assure = result.scalar_one_or_none()
     if not assure:
         raise HTTPException(
@@ -89,7 +94,7 @@ async def lister_assures(
     count_result = await db.execute(stmt)
     total = len(count_result.scalars().all())
 
-    stmt = stmt.offset(offset).limit(size)
+    stmt = stmt.options(selectinload(Assure.medecin_traitant)).offset(offset).limit(size)
     result = await db.execute(stmt)
     return result.scalars().all(), total
 

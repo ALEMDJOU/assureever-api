@@ -3,6 +3,7 @@ from datetime import date, datetime
 from typing import Optional, Literal
 
 from pydantic import BaseModel, EmailStr, field_validator
+from app.schemas.medecin import MedecinResponse
 
 PreferencePaiement = Literal["VIREMENT_BANCAIRE", "ESPECES", "MOBILE_MONEY"]
 
@@ -45,6 +46,7 @@ class AssureResponse(BaseModel):
     email: Optional[str]
     preference_paiement: str
     medecin_traitant_id: Optional[uuid.UUID]
+    medecin_traitant: Optional[MedecinResponse] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
